@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  server1:
+    image: golang:1.20.3-alpine3.17
+    container_name: server1
+    hostname: server1
+    tty: true
+    entrypoint: sh /root/entrypoint.sh
+    volumes:
+      - ./benchmark:/root/benchmark
+      - ./entrypoint.sh:/root/entrypoint.sh
+      - ./easshy.key.pub:/root/easshy.key.pub
+    ports:
+      - "20221:22"
+    networks:
+      - easshy_net
+
+  server2:
+    image: golang:1.20.3-alpine3.17
+    container_name: server2
+    hostname: server2
+    tty: true
+    entrypoint: sh /root/entrypoint.sh
+    volumes:
+      - ./benchmark:/root/benchmark
+      - ./entrypoint.sh:/root/entrypoint.sh
+      - ./easshy.key.pub:/root/easshy.key.pub
+    ports:
+      - "20222:22"
+    networks:
+      - easshy_net
+
+  server3:
+    image: golang:1.20.3-alpine3.17
+    container_name: server3
+    hostname: server3
+    tty: true
+    entrypoint: sh /root/entrypoint.sh
+    volumes:
+      - ./benchmark:/root/benchmark
+      - ./entrypoint.sh:/root/entrypoint.sh
+      - ./easshy.key.pub:/root/easshy.key.pub
+    ports:
+      - "20223:22"
+    networks:
+      - easshy_net
+
+networks:
+  easshy_net:
+    driver: bridge

@@ -1,0 +1,58 @@
+linters-settings:
+  govet:    
+    enable:
+      - asmdecl
+      - assign
+      - atomic
+      - bools
+      - buildtag
+      - cgocall
+      - copylocks
+      - loopclosure
+      - lostcancel
+      - nilfunc
+      - printf
+      - stdmethods
+      - structtag
+      - unmarshal
+      - unusedresult
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - appendCombine
+      - ifElseChain
+      - commentedOutCode
+      - captLocal
+
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - contextcheck
+    - dupl
+    - durationcheck
+    - exhaustive
+    - gocognit
+    - goconst
+    - gocritic
+    - maintidx
+    - makezero
+    - nestif
+    - nilerr
+    - prealloc
+    - reassign
+    - unconvert
+    - unparam
+
+run:
+  timeout: 5m
+  tests: false
+  skip-dirs:
+    - testing

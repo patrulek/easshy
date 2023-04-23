@@ -1,0 +1,56 @@
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  default:
+    desc: lint, build, test
+    cmds:
+     - task: lint
+     - task: build
+     - task: test
+    silent: true
+
+  all:
+    desc: lint, build, test and integration test
+    cmds:
+      - task: default
+      - task: test_integration
+    silent: true
+
+  lint:
+    desc: runs golangci-lint linter
+    cmds:
+      - golangci-lint run ./...
+    silent: true
+
+  build:
+    desc: build project
+    env:
+      CGO_ENABLED: 0
+    cmds:
+      - go build .
+    silent: true
+
+  test:
+    desc: run unit tests
+    env:
+      CGO_ENABLED: 1
+    cmds:
+      - go test -race -timeout 120s -count=1 -coverprofile=/tmp/coverage.out {{catLines .GO_PACKAGES}}
+    vars:
+      GO_PACKAGES:
+        sh: go list ./...
+    silent: true
+
+  test_integration:
+    desc: run integration tests (requires running docker and docker-compose on system)
+    env:
+      CGO_ENABLED: 0
+    cmds:
+      - rm -f testing/easshy.key*
+      - ssh-keygen -t rsa -b 4096 -f testing/easshy.key -N "" -q
+      - sh testing/run.sh
+      - rm -f testing/easshy.key*
+    silent: true
+    
