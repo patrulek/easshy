@@ -155,20 +155,11 @@ func (this *shell) growBuffer() error {
 }
 
 // close sends `exit` command to current shell's session and then closes ssh.Session.
-// Ignores all io.EOF errors.
 func (this *shell) close() error {
 	var errs []error
 
 	errs = append(errs, this.write("exit"))
 	errs = append(errs, this.Session.Wait())
-	errs = append(errs, this.stdin.Close())
-	errs = append(errs, this.Session.Close())
-
-	for i := 0; i < len(errs); i++ {
-		if errs[i] == io.EOF {
-			errs[i] = nil
-		}
-	}
 
 	this.Session, this.stdin, this.stdout = nil, nil, nil
 

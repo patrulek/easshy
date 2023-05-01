@@ -34,7 +34,7 @@ func Serial(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) ([]str
 	for _, cmd := range cmds {
 		output, err := client.Execute(ctx, cmd.String())
 		if err != nil {
-			if contextError(err) || !cmd.IgnoreError() {
+			if terminalError(err) || !cmd.IgnoreError() {
 				return result, err
 			}
 		}
@@ -84,7 +84,7 @@ func stream(ctx context.Context, client *Client, cmds []ICmd, bufC chan<- string
 
 		for _, cmd := range cmds {
 			output, err := client.Execute(ctx, cmd.String())
-			sendErr := contextError(err) || (err != nil && !cmd.IgnoreError())
+			sendErr := terminalError(err) || (err != nil && !cmd.IgnoreError())
 
 			if sendErr {
 				ierrC <- err
@@ -112,7 +112,7 @@ func stream(ctx context.Context, client *Client, cmds []ICmd, bufC chan<- string
 		}
 
 		err := <-ierrC
-		if contextError(err) {
+		if terminalError(err) {
 			err = io.ErrClosedPipe
 		}
 
@@ -195,7 +195,7 @@ func Parallel(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) ([]s
 				return
 			default:
 				if err != nil {
-					if contextError(err) || !cmd.IgnoreError() {
+					if terminalError(err) || !cmd.IgnoreError() {
 						errC <- err
 						return
 					}
@@ -223,8 +223,9 @@ func Parallel(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) ([]s
 	}
 }
 
-func contextError(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+func terminalError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, ErrClosed) || errors.Is(err, ErrNoSession)
 }
 
 // Cmd is a command which error, if occured, will not be ignored in a batch call.

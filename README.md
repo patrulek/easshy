@@ -77,6 +77,8 @@ Examples of each call can be seen in the [test file](testing/integration_test.go
 
 ## Changelog
 
+- **v0.1.2 - 01.05.2023**: Improved error handling
+
 - **v0.1.1 - 01.05.2023**: Added ShellContext construct for a batch calls
 
 - **v0.1.0 - 27.04.2023**: Initial version

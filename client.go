@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -181,12 +182,15 @@ func (this *Client) StartSession(ctx context.Context, opts ...Option) error {
 
 			return this.startSession(fctx, opts...)
 		},
-		func(error) int32 {
-			if this.shell == nil {
+		func(err error) int32 {
+			switch {
+			case errors.Is(err, io.EOF):
+				return s_closed
+			case this.shell == nil:
 				return s_new
+			default:
+				return s_idle
 			}
-
-			return s_idle
 		},
 	)
 
@@ -299,7 +303,11 @@ func (this *Client) Execute(ctx context.Context, cmd string) (output string, err
 			output, err = this.shell.read(fctx)
 			return err
 		},
-		func(error) int32 {
+		func(err error) int32 {
+			if err == io.EOF {
+				return s_closed
+			}
+
 			return s_idle
 		},
 	)
@@ -337,13 +345,7 @@ func (this *Client) Close(ctx context.Context) error {
 
 			return errors.Join(errs...)
 		},
-		func(error) int32 {
-			if this.shell == nil {
-				return s_new
-			}
-
-			return s_idle
-		},
+		nil,
 	)
 
 	return this.state.Queue(ctx, map[int32]any{
