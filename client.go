@@ -168,8 +168,9 @@ func getSignerFromKeyfile(keyPath, passPath string) (ssh.Signer, error) {
 
 // StartSession initiates a new shell session for the current connection.
 // Invalidates previous session, if such exist.
+// Allows to pass additional Option functions that will be called on a fresh session.
 // Returns ErrClosed if the connection has already been closed.
-func (this *Client) StartSession(ctx context.Context) error {
+func (this *Client) StartSession(ctx context.Context, opts ...Option) error {
 	startTransition := stepper.NewTransition(
 		s_starting,
 		s_idle,
@@ -178,7 +179,7 @@ func (this *Client) StartSession(ctx context.Context) error {
 				return err
 			}
 
-			return this.startSession(fctx)
+			return this.startSession(fctx, opts...)
 		},
 		func(error) int32 {
 			if this.shell == nil {
@@ -211,7 +212,7 @@ func (this *Client) ensureNoSession() (err error) {
 // startSession creates new *sshSession object and set it to current connection.
 // Session also initializes shell on remote host.
 // It is needed to ensure that previous session was already closed before calling this method.
-func (this *Client) startSession(ctx context.Context) error {
+func (this *Client) startSession(ctx context.Context, opts ...Option) error {
 	session, err := this.conn.NewSession()
 	if err != nil {
 		return err
@@ -227,14 +228,65 @@ func (this *Client) startSession(ctx context.Context) error {
 		return errors.Join(err, ierr)
 	}
 
+	if err := shell.runOpts(ctx, opts...); err != nil {
+		ierr := shell.close()
+		return errors.Join(err, ierr)
+	}
+
 	this.shell = shell
 	return nil
+}
+
+// runSession creates new, independent session on which provided command will be executed.
+// Its possible to set context for given command using WithShellContext option or ContextCmd as a command that will be executed.
+func (this *Client) runSession(ctx context.Context, cmd ICmd, opts ...Option) (string, error) {
+	session, err := this.conn.NewSession()
+	if err != nil {
+		return "", err
+	}
+
+	shell, err := newShell(session)
+	if err != nil {
+		return "", err
+	}
+
+	if err := shell.start(ctx); err != nil {
+		ierr := shell.close()
+		return "", errors.Join(err, ierr)
+	}
+
+	if err := shell.runOpts(ctx, opts...); err != nil {
+		ierr := shell.close()
+		return "", errors.Join(err, ierr)
+	}
+
+	if err := shell.setContext(ctx, cmd.Ctx()); err != nil {
+		ierr := shell.close()
+		return "", errors.Join(err, ierr)
+	}
+
+	if err := shell.write(cmd.String()); err != nil {
+		ierr := shell.close()
+		return "", errors.Join(err, ierr)
+	}
+
+	output, err := shell.read(ctx)
+	if err != nil {
+		ierr := shell.close()
+		return "", errors.Join(err, ierr)
+	}
+
+	if err := shell.close(); err != nil {
+		return output, err
+	}
+
+	return output, nil
 }
 
 // Execute attempts to execute the given command on the remote host, then waits for an output of the executed command.
 // A call to StartSession must be made prior to using Execute, otherwise ErrNoSession will be returned.
 // The connection must be active when calling this function, otherwise ErrClosed will be returned.
-// If another command is currently executing, ErrExecuting will be returned.
+// If another command or Close is currently processing, ErrExecuting will be returned.
 func (this *Client) Execute(ctx context.Context, cmd string) (output string, err error) {
 	executeTransition := stepper.NewTransition(
 		s_executing,

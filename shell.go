@@ -85,6 +85,23 @@ func (this *shell) start(ctx context.Context) error {
 	return nil
 }
 
+// runOpts apply all functional options to shell.
+func (this *shell) runOpts(ctx context.Context, opts ...Option) error {
+	for _, opt := range opts {
+		if err := opt(ctx, this); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// setContext set given shell context to current session.
+func (this *shell) setContext(ctx context.Context, shCtx ShellContext) error {
+	opt := WithShellContext(shCtx)
+	return opt(ctx, this)
+}
+
 func (this *shell) write(cmd string) error {
 	_, err := this.stdin.Write([]byte(cmd + "\n"))
 	return err

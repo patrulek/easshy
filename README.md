@@ -71,10 +71,13 @@ The non-interactive mode works by sending a batch of commands to the remote host
 - **Parallel:** A blocking call that executes commands concurrently in separate sessions and returns after all commands finish their execution.
 
 Commands may have an additional option that allows ignoring the error of a given command to prevent stopping the entire batch call.
+It's also possible to set context to specific command or a whole batch call with `ContextCmd` struct or `WithShellContext` option appropriately.
 
 Examples of each call can be seen in the [test file](testing/integration_test.go).
 
 ## Changelog
+
+- **v0.1.1 - 01.05.2023**: Added ShellContext construct for a batch calls
 
 - **v0.1.0 - 27.04.2023**: Initial version
 

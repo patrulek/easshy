@@ -59,7 +59,7 @@ func waitServers(ctx context.Context) bool {
 		case <-ctx.Done():
 			return false
 		default:
-			cmd := exec.Command("curl", "localhost:20221")
+			cmd := exec.Command("curl", "--http0.9", "localhost:20221")
 			if err := cmd.Run(); err != nil {
 				break
 			}
@@ -134,8 +134,6 @@ func testSerial(ctx context.Context, t *testing.T) {
 		Insecure: true,
 	}
 	cmds := []easshy.ICmd{
-		easshy.Cmd("export GO111MODULE=auto"),
-		easshy.Cmd("cd /root/benchmark"),
 		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=3"),
 		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=4"),
 	}
@@ -144,14 +142,21 @@ func testSerial(ctx context.Context, t *testing.T) {
 	defer cancel()
 
 	logf(t, "Executing commands in serial\n")
-	outputs, err := easshy.Serial(ctx, cfg, cmds)
+	outputs, err := easshy.Serial(ctx, cfg, cmds, easshy.WithShellContext(
+		easshy.ShellContext{
+			Path: "/root/benchmark",
+			Env: map[string]string{
+				"GO111MODULE": "auto",
+			},
+		},
+	))
 
 	logf(t, "outputs: %s", outputs)
 
 	require.NoError(t, err)
-	require.EqualValues(t, 4, len(outputs))
-	require.EqualValues(t, 9, len(strings.Split(outputs[2], "\n")))
-	require.True(t, strings.HasPrefix(outputs[2], "goos:"))
+	require.EqualValues(t, 2, len(outputs))
+	require.EqualValues(t, 9, len(strings.Split(outputs[0], "\n")))
+	require.True(t, strings.HasPrefix(outputs[0], "goos:"))
 }
 
 func testStream(ctx context.Context, t *testing.T) {
@@ -161,8 +166,6 @@ func testStream(ctx context.Context, t *testing.T) {
 		Insecure: true,
 	}
 	cmds := []easshy.ICmd{
-		easshy.Cmd("export GO111MODULE=auto"),
-		easshy.Cmd("cd /root/benchmark"),
 		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=3"),
 		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=4"),
 		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=5"),
@@ -172,9 +175,16 @@ func testStream(ctx context.Context, t *testing.T) {
 	defer cancel()
 
 	logf(t, "Streaming commands outputs\n")
-	reader, err := easshy.Stream(sctx, cfg, cmds)
+	reader, err := easshy.Stream(sctx, cfg, cmds, easshy.WithShellContext(
+		easshy.ShellContext{
+			Path: "/root/benchmark",
+			Env: map[string]string{
+				"GO111MODULE": "auto",
+			},
+		},
+	))
 	require.NoError(t, err)
-	count := 0
+	count := 3
 
 	for {
 		output, err := reader.Read()
@@ -183,15 +193,9 @@ func testStream(ctx context.Context, t *testing.T) {
 		}
 
 		logf(t, "output:\n%s\n", output)
-		require.NoError(t, err)
-
-		if count < 3 {
-			continue
-		}
-
-		logf(t, "output:\n%s\n", output)
 		require.EqualValues(t, 6+count, len(strings.Split(output, "\n")))
 		require.True(t, strings.HasPrefix(output, "goos:"))
+		count++
 	}
 
 	sctx, cancel = context.WithCancel(ctx)
@@ -213,7 +217,10 @@ func testParallel(ctx context.Context, t *testing.T) {
 		easshy.Cmd("export CGO_ENABLED=0"),
 		easshy.Cmd(`echo "CGO_ENABLED=$CGO_ENABLED"`),
 		easshy.Cmd("ls /root"),
-		easshy.Cmd("wc -l /root/benchmark/benchmark_test.go"),
+		easshy.ContextCmd{
+			Cmd:  "wc -l benchmark_test.go",
+			Path: "/root/benchmark/",
+		},
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -226,8 +233,8 @@ func testParallel(ctx context.Context, t *testing.T) {
 
 	require.NoError(t, err)
 	require.EqualValues(t, 4, len(outputs))
-	require.EqualValues(t, "CGO_ENABLED=\n", outputs[1]) // not CGO_ENABLED=0 because each command is executed in different shell environment
-	require.EqualValues(t, "12 /root/benchmark/benchmark_test.go\n", outputs[3])
+	require.EqualValues(t, "CGO_ENABLED=\r\n", outputs[1]) // not CGO_ENABLED=0 because each command is executed in different shell environment
+	require.EqualValues(t, "12 benchmark_test.go\r\n", outputs[3])
 }
 
 func logf(t *testing.T, f string, args ...any) {

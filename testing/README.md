@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-To run this test it is required to have running `docker` and installed `docker-compose` on current system.
+To run this test it is required to have running `docker` and installed `docker-compose` on current system. You should also ensure that docker can be run without sudo privileges.
 
 Internet connection is also required to download docker image (unless it's already cached).
 

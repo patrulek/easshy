@@ -11,13 +11,14 @@ import (
 type ICmd interface {
 	String() string
 	IgnoreError() bool
+	Ctx() ShellContext
 }
 
 // Serial is a convenience wrapper that establishes a single shell session on a given host and executes the provided commands sequentially.
 // The function returns when the last command finishes execution or when an error occurs.
 // If no error is returned, the result will contain separate output for each of the provided commands.
 // In case of an error, the result will include separate output for all successfully executed commands prior to the error.
-func Serial(ctx context.Context, cfg Config, cmds []ICmd) ([]string, error) {
+func Serial(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) ([]string, error) {
 	client, err := NewClient(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -25,7 +26,7 @@ func Serial(ctx context.Context, cfg Config, cmds []ICmd) ([]string, error) {
 
 	defer client.Close(ctx)
 
-	if err := client.StartSession(ctx); err != nil {
+	if err := client.StartSession(ctx, opts...); err != nil {
 		return nil, err
 	}
 
@@ -48,13 +49,13 @@ func Serial(ctx context.Context, cfg Config, cmds []ICmd) ([]string, error) {
 // The function returns a *StreamReader that allows reading the output of the commands as soon as they finish execution.
 // If no error occurs during command execution, the Reader will return separate outputs for all provided commands, and will return EOF when attempting to read more outputs.
 // In case of an command error, the Reader will return that error instead.
-func Stream(ctx context.Context, cfg Config, cmds []ICmd) (*StreamReader, error) {
+func Stream(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) (*StreamReader, error) {
 	client, err := NewClient(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := client.StartSession(ctx); err != nil {
+	if err := client.StartSession(ctx, opts...); err != nil {
 		return nil, err
 	}
 
@@ -171,7 +172,7 @@ func (this *StreamReader) Read() (output string, err error) {
 // The function returns when all commands finish execution or when any error occurs.
 // If no error is returned, the result will contain separate output for each of the provided commands.
 // In case of an error, the result will include separate output for all successfully executed commands, and an empty output for the ones that did not complete their execution.
-func Parallel(ctx context.Context, cfg Config, cmds []ICmd) ([]string, error) {
+func Parallel(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) ([]string, error) {
 	client, err := NewClient(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -187,7 +188,7 @@ func Parallel(ctx context.Context, cfg Config, cmds []ICmd) ([]string, error) {
 
 	for i, cmd := range cmds {
 		go func(i int, cmd ICmd) {
-			output, err := run(client, cmd.String())
+			output, err := client.runSession(ctx, cmd, opts...)
 
 			select {
 			case <-doneC:
@@ -222,26 +223,6 @@ func Parallel(ctx context.Context, cfg Config, cmds []ICmd) ([]string, error) {
 	}
 }
 
-// run creates new, independent session for given client and executes provided command.
-func run(client *Client, cmd string) (string, error) {
-	session, err := client.conn.NewSession()
-	if err != nil {
-		return "", err
-	}
-
-	output, err := session.Output(cmd)
-	if err != nil {
-		_ = session.Close()
-		return "", err
-	}
-
-	if err := session.Close(); err != nil && err != io.EOF {
-		return "", err
-	}
-
-	return string(output), nil
-}
-
 func contextError(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
@@ -257,6 +238,10 @@ func (this Cmd) IgnoreError() bool {
 	return false
 }
 
+func (this Cmd) Ctx() ShellContext {
+	return ShellContext{}
+}
+
 // OptionalCmd is a command which error, if occured, will be ignored to not stop whole batch call.
 // Will not ignore context errors.
 type OptionalCmd string
@@ -267,4 +252,38 @@ func (this OptionalCmd) String() string {
 
 func (this OptionalCmd) IgnoreError() bool {
 	return true
+}
+
+func (this OptionalCmd) Ctx() ShellContext {
+	return ShellContext{}
+}
+
+// ContextCmd is a command that let you specify shell context that will be set before calling actual command.
+// Errors returned during context setting will not be ignored regardless of IgnoreError result.
+type ContextCmd struct {
+	Cmd      string
+	Optional bool
+	Path     string
+	Env      map[string]string
+}
+
+func (this ContextCmd) String() string {
+	return this.Cmd
+}
+
+func (this ContextCmd) IgnoreError() bool {
+	return this.Optional
+}
+
+func (this ContextCmd) Ctx() ShellContext {
+	return ShellContext{
+		Path: this.Path,
+		Env:  this.Env,
+	}
+}
+
+// ShellContext represents context that will be used to call a command.
+type ShellContext struct {
+	Path string
+	Env  map[string]string
 }
