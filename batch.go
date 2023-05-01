@@ -32,6 +32,10 @@ func Serial(ctx context.Context, cfg Config, cmds []ICmd, opts ...Option) ([]str
 
 	result := make([]string, 0)
 	for _, cmd := range cmds {
+		if err := client.shell.setContext(ctx, cmd.Ctx()); err != nil {
+			return result, err
+		}
+
 		output, err := client.Execute(ctx, cmd.String())
 		if err != nil {
 			if terminalError(err) || !cmd.IgnoreError() {
@@ -83,6 +87,11 @@ func stream(ctx context.Context, client *Client, cmds []ICmd, bufC chan<- string
 		defer close(ierrC)
 
 		for _, cmd := range cmds {
+			if err := client.shell.setContext(ctx, cmd.Ctx()); err != nil {
+				ierrC <- err
+				return
+			}
+
 			output, err := client.Execute(ctx, cmd.String())
 			sendErr := terminalError(err) || (err != nil && !cmd.IgnoreError())
 

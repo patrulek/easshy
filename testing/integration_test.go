@@ -134,7 +134,13 @@ func testSerial(ctx context.Context, t *testing.T) {
 		Insecure: true,
 	}
 	cmds := []easshy.ICmd{
-		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=3"),
+		easshy.ContextCmd{
+			Cmd:  "/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=3",
+			Path: "/root/benchmark",
+			Env: map[string]string{
+				"GO111MODULE": "auto",
+			},
+		},
 		easshy.OptionalCmd("/usr/local/go/bin/go test -benchmem -run=^$ -bench ^BenchmarkSleep$ -count=4"),
 	}
 
@@ -142,14 +148,7 @@ func testSerial(ctx context.Context, t *testing.T) {
 	defer cancel()
 
 	logf(t, "Executing commands in serial\n")
-	outputs, err := easshy.Serial(ctx, cfg, cmds, easshy.WithShellContext(
-		easshy.ShellContext{
-			Path: "/root/benchmark",
-			Env: map[string]string{
-				"GO111MODULE": "auto",
-			},
-		},
-	))
+	outputs, err := easshy.Serial(ctx, cfg, cmds)
 
 	logf(t, "outputs: %s", outputs)
 
